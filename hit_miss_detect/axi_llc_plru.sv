@@ -1,8 +1,9 @@
 //PLRU Module for 2-way, 4-way, 8-way, 16-way and 32-way set associativity 
 // Encoding bits in the register (0-> left;  1 -> right)
 
+// Author: Gopishankar Thayyil <gthayyil@uwaterloo.ca>
+
 //Create a SRAM for the pseudo LRU Bits
-// So for the above case we need a memory mapping as shown below
 // register size -> (Cfg.SetAssociativity -1) * (`Cfg.NumLines)
 
 module axi_llc_plru #(
@@ -65,12 +66,12 @@ typedef logic [Cfg.IndexLength-1 :0] line_addr;
 typedef logic [Cfg.SetAssociativity-2:0] data_plru;
 
 //SRAM Request Signals
-logic [1:0] plru_request;
-logic [1:0] plru_we;
-logic [1:0] plru_bei;
-logic [1:0] [Cfg.IndexLength-1 :0] plru_line_addr;
-logic [1:0] [Cfg.SetAssociativity-2:0] plru_wdata ;
-logic [1:0] [Cfg.SetAssociativity-2:0] plru_rdata ;
+logic plru_request;
+logic plru_we;
+logic plru_bei;
+logic [Cfg.IndexLength-1 :0] plru_line_addr;
+logic [Cfg.SetAssociativity-2:0] plru_wdata ;
+logic [Cfg.SetAssociativity-2:0] plru_rdata ;
 
 //temp register for storage between reads and write from the SRAM
 logic [Cfg.SetAssociativity-2:0] temp_ram;
@@ -110,9 +111,9 @@ tc_sram #(
       .NumWords    ( Cfg.NumLines                 ),
       .DataWidth   ( plru_datalen                 ),
       .ByteWidth   ( plru_datalen                 ),
-      .NumPorts    ( 32'd2                        ),
+      .NumPorts    ( 32'd1                        ),
       .Latency     ( 32'd0			    ),
-      .SimInit     ( "zeros"                      ),
+      .SimInit     ( "none"                      ),
       .PrintSimCfg ( 1'b1                         )
 ) i_plru_store (
       .clk_i (clk_i),
@@ -162,31 +163,28 @@ shift_reg #(
 assign plru_bist_res_i = ((temp_ram) ~^ (plru_bist_pattern));
    
 // Memory Read/Write delay signals    
-assign ram_rvalid_d = (plru_request[0] & ~plru_we[0]) ? 1 : 0;    
+assign ram_rvalid_d = (plru_request & ~plru_we) ? 1 : 0;    
 `FFLARN(ram_rvalid_q, ram_rvalid_d, 1'b1, 1'b0, clk_i, rst_ni)
     
 //--------------MEMORY READ/WRITE TASKS------------------------//
 
 //Write task onto tc_sram (Dual port memory)
-task write_tc_sram (input [Cfg.IndexLength-1 :0] ram_index, input [Cfg.SetAssociativity - 2 : 0] wdata, input int i); 
+task write_tc_sram (input [Cfg.IndexLength-1 :0] ram_index, input [Cfg.SetAssociativity - 2 : 0] wdata); 
 
-    plru_request [i] = 1;
-    plru_we [i] = 1;
-    plru_line_addr [i] = ram_index;
-    plru_wdata [i] = wdata;
-    
-    plru_request [0] = 0;
-    plru_line_addr [0] = '0;
+    plru_request = 1;
+    plru_we = 1;
+    plru_line_addr = ram_index;
+    plru_wdata = wdata;
     
 endtask
 
 
 //Read task from tc_sram (Dual port memory)
-task read_tc_sram (input [Cfg.IndexLength-1 :0] ram_index, input int j); 
+task read_tc_sram (input [Cfg.IndexLength-1 :0] ram_index); 
 		
-    plru_request [j] = 1;
-    plru_we [j] = 0;
-    plru_line_addr [j] = ram_index;
+    plru_request = 1;
+    plru_we = 0;
+    plru_line_addr = ram_index;
 
 endtask
 
@@ -481,7 +479,7 @@ generate
             	temp_ram = data_plru'(0);
           
           	// PLRU SRAM Request Signals                	
-            	plru_request = 2'b00;
+            	plru_request = 1'b0;
     		plru_line_addr = line_addr'(0);
     		plru_wdata = data_plru'(0);
     		
@@ -490,34 +488,34 @@ generate
     		
     		if (bist_i) begin
                 	//To initialize the SRAM to Zeros
-            		plru_request [0] = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we [0]      = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr [0] = plru_gen_index;
-            		plru_wdata [0] = plru_gen_pattern;
+            		plru_request = {Cfg.SetAssociativity{plru_gen_req}};
+            		plru_we      = {Cfg.SetAssociativity{plru_gen_we}};
+            		plru_line_addr = plru_gen_index;
+            		plru_wdata = plru_gen_pattern;
             		if (ram_rvalid_q) begin
-            			temp_ram = plru_rdata[0];
+            			temp_ram = plru_rdata;
             			plru_bist_res_valid_i = 1;
             		end
             	end
                 
                 if (hit_i && !valid_o_plru) begin 
                     //we are a hit 
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata [0];                   
+                    	temp_ram = plru_rdata;                   
                     	two_way_hit (res_indicator, two_way_temp_ram); 
-                    	write_tc_sram(ram_index,two_way_temp_ram, 0);
-                    	valid_o_plru = 1; 
-                    end    
+                    	write_tc_sram(ram_index,two_way_temp_ram);
+                    	valid_o_plru = 1;   
+                    end
                 end
                 
                 if (evict_i && !valid_o) begin              
                     //find which way to evict       
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata[0];
+                    	temp_ram = plru_rdata;
                     	two_way_miss (temp_ram, spm_lock, out_way_ind, two_way_temp_ram);
-                    	write_tc_sram(ram_index, two_way_temp_ram, 1);
+                    	write_tc_sram(ram_index, two_way_temp_ram);
                     	valid_o = 1;
                     	if ((tag_dirty_i & out_way_ind) != '0)
                     		evict_o = 1'b1;
@@ -546,7 +544,7 @@ generate
             	temp_ram = data_plru'(0);
           
           	// PLRU SRAM Request Signals                	
-            	plru_request = 2'b00;
+            	plru_request = 1'b0;
     		plru_line_addr = line_addr'(0);
     		plru_wdata = data_plru'(0);
     		
@@ -555,37 +553,37 @@ generate
     		
     		if (bist_i) begin
                 	//To initialize the SRAM to Zeros
-            		plru_request [0] = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we [0]      = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr [0] = plru_gen_index;
-            		plru_wdata [0] = plru_gen_pattern;
+            		plru_request = {Cfg.SetAssociativity{plru_gen_req}};
+            		plru_we     = {Cfg.SetAssociativity{plru_gen_we}};
+            		plru_line_addr = plru_gen_index;
+            		plru_wdata = plru_gen_pattern;
             		if (ram_rvalid_q) begin
-            			temp_ram = plru_rdata[0];
+            			temp_ram = plru_rdata;
             			plru_bist_res_valid_i = 1;
             		end
             	end
 
                 if (hit_i && !valid_o_plru) begin
                     //we are a hit
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata [0]; 
+                    	temp_ram = plru_rdata; 
                     	four_way_hit (res_indicator, temp_ram, four_way_temp_ram);
-                    	write_tc_sram(ram_index,four_way_temp_ram, 1);
+                    	write_tc_sram(ram_index,four_way_temp_ram);
                     	valid_o_plru = 1;
                     	end
                 end
                 
                 if (evict_i && !valid_o) begin
                     //find which way to evict
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata [0];
+                    	temp_ram = plru_rdata;
                     	four_way_miss(temp_ram, spm_lock, out_way_ind, four_way_temp_ram); 
-                    	write_tc_sram(ram_index,four_way_temp_ram, 1);   
+                    	write_tc_sram(ram_index,four_way_temp_ram);   
                     	valid_o = 1;
                     	if ((tag_dirty_i & out_way_ind) != '0)
-                    		evict_o = 1'b1; 
+                    		evict_o = 1'b1;   
                     	end              
                 end  
 
@@ -610,7 +608,7 @@ generate
             	temp_ram = data_plru'(0);
           
           	// PLRU SRAM Request Signals                	
-            	plru_request = 2'b00;
+            	plru_request = 1'b0;
     		plru_line_addr = line_addr'(0);
     		plru_wdata = data_plru'(0);
     		
@@ -619,34 +617,34 @@ generate
     		          	
             	if (bist_i) begin
             		//To initialize the SRAM to Zeros
-            		plru_request [0] = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we [0]      = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr [0] = plru_gen_index;
-            		plru_wdata [0] = plru_gen_pattern;
+            		plru_request = {Cfg.SetAssociativity{plru_gen_req}};
+            		plru_we      = {Cfg.SetAssociativity{plru_gen_we}};
+            		plru_line_addr = plru_gen_index;
+            		plru_wdata = plru_gen_pattern;
             		if (ram_rvalid_q) begin
-            			temp_ram = plru_rdata[0];
+            			temp_ram = plru_rdata;
             			plru_bist_res_valid_i = 1;
             		end
             	end
            
                 if (hit_i && !valid_o_plru) begin
                     //we are a res_hit
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata [0];
+                    	temp_ram = plru_rdata;
                     	eight_way_hit (res_indicator, temp_ram, eight_way_temp_ram);
-                    	write_tc_sram(ram_index,eight_way_temp_ram, 1);
+                    	write_tc_sram(ram_index,eight_way_temp_ram);
                     	valid_o_plru = 1;
                 	end
                   end
         
                 if (evict_i && !valid_o) begin
                 
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata [0];
+                    	temp_ram = plru_rdata;
                     	eight_way_miss (temp_ram, spm_lock, out_way_ind, eight_way_temp_ram);
-                    	write_tc_sram(ram_index,eight_way_temp_ram, 1);
+                    	write_tc_sram(ram_index,eight_way_temp_ram);
                     	valid_o = 1;
                     	if ((tag_dirty_i & out_way_ind) != '0)
                     		evict_o = 1'b1;
@@ -674,7 +672,7 @@ generate
             	temp_ram = data_plru'(0);
           
           	// PLRU SRAM Request Signals                	
-            	plru_request = 2'b00;
+            	plru_request = 1'b0;
     		plru_line_addr = line_addr'(0);
     		plru_wdata = data_plru'(0);
     		
@@ -683,34 +681,34 @@ generate
     		
     		if (bist_i) begin
                 	//To initialize the SRAM to Zeros
-            		plru_request [0] = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we [0]      = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr [0] = plru_gen_index;
-            		plru_wdata [0] = plru_gen_pattern;
+            		plru_request = {Cfg.SetAssociativity{plru_gen_req}};
+            		plru_we     = {Cfg.SetAssociativity{plru_gen_we}};
+            		plru_line_addr = plru_gen_index;
+            		plru_wdata = plru_gen_pattern;
             		if (ram_rvalid_q) begin
-            			temp_ram = plru_rdata[0];
+            			temp_ram = plru_rdata;
             			plru_bist_res_valid_i = 1;
             		end
             	end
 
                 if (hit_i && !valid_o_plru) begin
                     //we are a res_hit
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata [0];
+                    	temp_ram = plru_rdata;
                     	sixteen_way_hit (res_indicator, temp_ram, sixteen_way_temp_ram);
-                    	write_tc_sram(ram_index,sixteen_way_temp_ram, 1);
+                    	write_tc_sram(ram_index,sixteen_way_temp_ram);
                     	valid_o_plru = 1;
                 	end
                 end
                 
                 if (evict_i && !valid_o) begin
                     //find which way to evict
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata [0];
+                    	temp_ram = plru_rdata;
                     	sixteen_way_miss (temp_ram, spm_lock, out_way_ind, sixteen_way_temp_ram);
-                    	write_tc_sram(ram_index,sixteen_way_temp_ram, 1);
+                    	write_tc_sram(ram_index,sixteen_way_temp_ram);
                     	valid_o = 1;
                     	if ((tag_dirty_i & out_way_ind) != '0)
                     		evict_o = 1'b1;
@@ -738,7 +736,7 @@ generate
             	temp_ram = data_plru'(0);
           
           	// PLRU SRAM Request Signals                	
-            	plru_request = 2'b00;
+            	plru_request = 1'b0;
     		plru_line_addr = line_addr'(0);
     		plru_wdata = data_plru'(0);
     		
@@ -747,34 +745,34 @@ generate
     		
     		if (bist_i) begin
                 	//To initialize the SRAM to Zeros
-            		plru_request [0] = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we [0]      = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr [0] = plru_gen_index;
-            		plru_wdata [0] = plru_gen_pattern;
+            		plru_request = {Cfg.SetAssociativity{plru_gen_req}};
+            		plru_we      = {Cfg.SetAssociativity{plru_gen_we}};
+            		plru_line_addr = plru_gen_index;
+            		plru_wdata = plru_gen_pattern;
             		if (ram_rvalid_q) begin
-            			temp_ram = plru_rdata[0];
+            			temp_ram = plru_rdata;
             			plru_bist_res_valid_i = 1;
             		end
             	end
 
                 if (hit_i && !valid_o_plru) begin
                     //we are a res_hit
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata [0];
+                    	temp_ram = plru_rdata;
                     	thirtytwo_way_hit (res_indicator, temp_ram, thirtytwo_way_temp_ram);
-                    	write_tc_sram(ram_index,thirtytwo_way_temp_ram, 1);
+                    	write_tc_sram(ram_index,thirtytwo_way_temp_ram);
                     	valid_o_plru = 1;
                     	end
                 end
                 
                 if (evict_i && !valid_o) begin
                     //find which way to evict
-                    read_tc_sram(ram_index, 0);
+                    read_tc_sram(ram_index);
                     if (ram_rvalid_q) begin
-                    temp_ram = plru_rdata [0];
+                    temp_ram = plru_rdata;
                     thirtytwo_way_miss (temp_ram, spm_lock, out_way_ind, thirtytwo_way_temp_ram);
-                    write_tc_sram(ram_index,thirtytwo_way_temp_ram, 1);
+                    write_tc_sram(ram_index,thirtytwo_way_temp_ram);
                     valid_o = 1;
                     if ((tag_dirty_i & out_way_ind) != '0)
                     	evict_o = 1'b1;
