@@ -422,327 +422,104 @@ endtask
 // -----------------------------------------------------------------------------------------------------------------------// 
    
 generate
-    case (Cfg.SetAssociativity)
-
-	// 2-WAY 
-        2: begin     
-            always_comb begin : axi_llc_2_way  
-            
-            	// Outputs required for EVICTION
-            	valid_o = 0; 
-            	evict_o = 0;
-            	out_way_ind = way_ind_t'(0);
-            	// Outputs required for HIT Detection
-            	valid_o_plru = 0;
-            	// Temporary data storage from SRAM Unit
-            	temp_ram = data_plru'(0);
-          
-          	    // PLRU SRAM Request Signals                	
-            	plru_request = 1'b0;
-    		    plru_line_addr = line_addr'(0);
-    		    plru_wdata = data_plru'(0);
-    		
-    		    // PLRU BIST Result valid signal
-    		    plru_bist_res_valid_i = 0;
-    		
-    		    if (bist_i) begin
-                	//To initialize the SRAM to Zeros
-            		plru_request    = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we         = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr  = plru_gen_index;
-            		plru_wdata      = plru_gen_pattern;
-            		if (ram_rvalid_q) begin
-            			temp_ram              = plru_rdata;
-            			plru_bist_res_valid_i = 1;
-            		end
-            	end  
-
-                if (hit_i && !valid_o_plru) begin 
-                    //we are a hit 
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata;                   
-                    	two_way_hit (res_indicator, two_way_temp_ram); 
-                    	write_tc_sram(ram_index,two_way_temp_ram);
-                    	valid_o_plru = 1;   
-                    end
-                end  
-
-                if (evict_i && !valid_o) begin              
-                    //find which way to evict       
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata;
-                    	two_way_miss (temp_ram, spm_lock, out_way_ind, two_way_temp_ram);
-                    	write_tc_sram(ram_index, two_way_temp_ram);
-                    	valid_o = 1;
-                    	if ((tag_dirty_i & out_way_ind) != '0)
-                    		evict_o = 1'b1;
-                    end	
-                end
-
-            end
-
-        end
     
-
-
-	// 4-WAY
-        4: begin 
-
-            always_comb begin : axi_llc_4_way
-            
-            	// Outputs required for EVICTION
-            	valid_o = 0; 
-            	evict_o = 0;
-            	out_way_ind = way_ind_t'(0);
-            	// Outputs required for HIT Detection
-            	valid_o_plru = 0;
-            	// Temporary data storage from SRAM Unit
-            	temp_ram = data_plru'(0);
-          
-          	    // PLRU SRAM Request Signals                	
-            	plru_request = 1'b0;
-    		    plru_line_addr = line_addr'(0);
-    		    plru_wdata = data_plru'(0);
-    		
-    		    // PLRU BIST Result valid signal
-    		    plru_bist_res_valid_i = 0;
-    		
-    		    if (bist_i) begin
-                	//To initialize the SRAM to Zeros
-            		plru_request    = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we         = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr  = plru_gen_index;
-            		plru_wdata      = plru_gen_pattern;
-            		if (ram_rvalid_q) begin
-            			temp_ram              = plru_rdata;
-            			plru_bist_res_valid_i = 1;
-            		end
-            	end
-
-                if (hit_i && !valid_o_plru) begin
-                    //we are a hit
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata; 
-                    	four_way_hit (res_indicator, temp_ram, four_way_temp_ram);
-                    	write_tc_sram(ram_index,four_way_temp_ram);
-                    	valid_o_plru = 1;
-                    end
-                end
-                
-                if (evict_i && !valid_o) begin
-                    //find which way to evict
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata;
-                    	four_way_miss(temp_ram, spm_lock, out_way_ind, four_way_temp_ram); 
-                    	write_tc_sram(ram_index,four_way_temp_ram);   
-                    	valid_o = 1;
-                    	if ((tag_dirty_i & out_way_ind) != '0)
-                    		evict_o = 1'b1;   
-                    end              
-                end  
-
-            end
-
-        end
-
-
-
-	// 8-WAY
-        8: begin 
-
-            always_comb begin : axi_llc_8_way
-            
-            	// Outputs required for EVICTION
-            	valid_o = 0; 
-            	evict_o = 0;
-            	out_way_ind = way_ind_t'(0);
-            	// Outputs required for HIT Detection
-            	valid_o_plru = 0;
-            	// Temporary data storage from SRAM Unit
-            	temp_ram = data_plru'(0);
-          
-          	    // PLRU SRAM Request Signals                	
-            	plru_request = 1'b0;
-    		    plru_line_addr = line_addr'(0);
-    		    plru_wdata = data_plru'(0);
-    		
-    		    // PLRU BIST Result valid signal
-    		    plru_bist_res_valid_i = 0;
-    		          	
-            	if (bist_i) begin
-            		//To initialize the SRAM to Zeros
-            		plru_request     = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we          = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr   = plru_gen_index;
-            		plru_wdata       = plru_gen_pattern;
-            		if (ram_rvalid_q) begin
-            			temp_ram              = plru_rdata;
-            			plru_bist_res_valid_i = 1;
-            		end
-            	end
-           
-                if (hit_i && !valid_o_plru) begin
-                    //we are a res_hit
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata;
-                    	eight_way_hit (res_indicator, temp_ram, eight_way_temp_ram);
-                    	write_tc_sram(ram_index,eight_way_temp_ram);
-                    	valid_o_plru = 1;
-                	end
-                  end
-        
-                if (evict_i && !valid_o) begin
-                
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata;
-                    	eight_way_miss (temp_ram, spm_lock, out_way_ind, eight_way_temp_ram);
-                    	write_tc_sram(ram_index,eight_way_temp_ram);
-                    	valid_o = 1;
-                    	if ((tag_dirty_i & out_way_ind) != '0)
-                    		evict_o = 1'b1;
-                    end
-                end
-
-            end
-
-        end
-
-
-
-	// 16-WAY
-        16: begin 
-
-            always_comb begin : axi_llc_16_way
-            
-            	// Outputs required for EVICTION
-            	valid_o = 0; 
-            	evict_o = 0;
-            	out_way_ind = way_ind_t'(0);
-            	// Outputs required for HIT Detection
-            	valid_o_plru = 0;
-            	// Temporary data storage from SRAM Unit
-            	temp_ram = data_plru'(0);
-          
-          	    // PLRU SRAM Request Signals                	
-            	plru_request = 1'b0;
-    		    plru_line_addr = line_addr'(0);
-    		    plru_wdata = data_plru'(0);
-    		
-    		    // PLRU BIST Result valid signal
-    		    plru_bist_res_valid_i = 0;
-    		
-    		    if (bist_i) begin
-                	//To initialize the SRAM to Zeros
-            		plru_request   = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we        = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr = plru_gen_index;
-            		plru_wdata     = plru_gen_pattern;
-            		if (ram_rvalid_q) begin
-            			temp_ram              = plru_rdata;
-            			plru_bist_res_valid_i = 1;
-            		end
-            	end
-
-                if (hit_i && !valid_o_plru) begin
-                    //we are a res_hit
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata;
-                    	sixteen_way_hit (res_indicator, temp_ram, sixteen_way_temp_ram);
-                    	write_tc_sram(ram_index,sixteen_way_temp_ram);
-                    	valid_o_plru = 1;
-                	end
-                end
-                
-                if (evict_i && !valid_o) begin
-                    //find which way to evict
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata;
-                    	sixteen_way_miss (temp_ram, spm_lock, out_way_ind, sixteen_way_temp_ram);
-                    	write_tc_sram(ram_index,sixteen_way_temp_ram);
-                    	valid_o = 1;
-                    	if ((tag_dirty_i & out_way_ind) != '0)
-                    		evict_o = 1'b1;
-                    end
-                end
-
-            end
-
-        end
-
-
-
-	// 32-WAY
-        32: begin 
-
-            always_comb begin : axi_llc_32_way
-            
-            	// Outputs required for EVICTION
-            	valid_o = 0; 
-            	evict_o = 0;
-            	out_way_ind = way_ind_t'(0);
-            	// Outputs required for HIT Detection
-            	valid_o_plru = 0;
-            	// Temporary data storage from SRAM Unit
-            	temp_ram = data_plru'(0);
-          
-          	    // PLRU SRAM Request Signals                	
-            	plru_request = 1'b0;
-    		    plru_line_addr = line_addr'(0);
-    		    plru_wdata = data_plru'(0);
-    		
-    		    // PLRU BIST Result valid signal
-    		    plru_bist_res_valid_i = 0;
-    		
-    		    if (bist_i) begin
-                	//To initialize the SRAM to Zeros
-            		plru_request    = {Cfg.SetAssociativity{plru_gen_req}};
-            		plru_we         = {Cfg.SetAssociativity{plru_gen_we}};
-            		plru_line_addr  = plru_gen_index;
-            		plru_wdata      = plru_gen_pattern;
-            		if (ram_rvalid_q) begin
-            			temp_ram              = plru_rdata;
-            			plru_bist_res_valid_i = 1;
-            		end
-            	end
-
-                if (hit_i && !valid_o_plru) begin
-                    //we are a res_hit
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    	temp_ram = plru_rdata;
-                    	thirtytwo_way_hit (res_indicator, temp_ram, thirtytwo_way_temp_ram);
-                    	write_tc_sram(ram_index,thirtytwo_way_temp_ram);
-                    	valid_o_plru = 1;
-                    end
-                end
-                
-                if (evict_i && !valid_o) begin
-                    //find which way to evict
-                    read_tc_sram(ram_index);
-                    if (ram_rvalid_q) begin
-                    temp_ram = plru_rdata;
-                    thirtytwo_way_miss (temp_ram, spm_lock, out_way_ind, thirtytwo_way_temp_ram);
-                    write_tc_sram(ram_index,thirtytwo_way_temp_ram);
-                    valid_o = 1;
-                    if ((tag_dirty_i & out_way_ind) != '0)
-                    	evict_o = 1'b1;
-                    end
-                end
-
-            end
-
-        end      
+    always_comb begin : axi_llc_all_way
     
-    endcase
+        // Outputs required for EVICTION
+        valid_o = 0; 
+        evict_o = 0;
+        out_way_ind = way_ind_t'(0);
+        // Outputs required for HIT Detection
+        valid_o_plru = 0;
+        // Temporary data storage from SRAM Unit
+        temp_ram = data_plru'(0);
+    
+        // PLRU SRAM Request Signals                	
+        plru_request = 1'b0;
+        plru_line_addr = line_addr'(0);
+        plru_wdata = data_plru'(0);
+    
+        // PLRU BIST Result valid signal
+        plru_bist_res_valid_i = 0;
+    
+        if (bist_i) begin
+            //To initialize the SRAM to Zeros
+            plru_request    = {Cfg.SetAssociativity{plru_gen_req}};
+            plru_we         = {Cfg.SetAssociativity{plru_gen_we}};
+            plru_line_addr  = plru_gen_index;
+            plru_wdata      = plru_gen_pattern;
+            if (ram_rvalid_q) begin
+                temp_ram              = plru_rdata;
+                plru_bist_res_valid_i = 1;
+            end
+        end  
 
-endgenerate 
+        if (hit_i && !valid_o_plru) begin 
+            //we are a hit 
+            read_tc_sram(ram_index);
+            if (ram_rvalid_q) begin
+                temp_ram = plru_rdata; 
+                case (Cfg.SetAssociativity)                  
+                    2: begin 
+                        two_way_hit (res_indicator, two_way_temp_ram);
+                        write_tc_sram(ram_index,two_way_temp_ram);
+                    end
+                    4: begin
+                        four_way_hit (res_indicator, temp_ram, four_way_temp_ram);
+                        write_tc_sram(ram_index,four_way_temp_ram);
+                    end
+                    8: begin
+                        eight_way_hit (res_indicator, temp_ram, eight_way_temp_ram);
+                        write_tc_sram(ram_index,eight_way_temp_ram);
+                    end
+                    16: begin
+                        sixteen_way_hit (res_indicator, temp_ram, sixteen_way_temp_ram);
+                        write_tc_sram(ram_index,sixteen_way_temp_ram);
+                    end
+                    32: begin
+                        thirtytwo_way_hit (res_indicator, temp_ram, thirtytwo_way_temp_ram);
+                        write_tc_sram(ram_index,thirtytwo_way_temp_ram);
+                    end
+                endcase 
+                valid_o_plru = 1;   
+            end
+        end  
 
+        if (evict_i && !valid_o) begin              
+            //find which way to evict       
+            read_tc_sram(ram_index);
+            if (ram_rvalid_q) begin
+                temp_ram = plru_rdata;
+                case (Cfg.SetAssociativity)                  
+                    2: begin 
+                        two_way_miss (temp_ram, spm_lock, out_way_ind, two_way_temp_ram);
+                        write_tc_sram(ram_index,two_way_temp_ram);
+                    end
+                    4: begin
+                        four_way_miss(temp_ram, spm_lock, out_way_ind, four_way_temp_ram);
+                        write_tc_sram(ram_index,four_way_temp_ram);
+                    end
+                    8: begin
+                        eight_way_miss (temp_ram, spm_lock, out_way_ind, eight_way_temp_ram);
+                        write_tc_sram(ram_index,eight_way_temp_ram);
+                    end
+                    16: begin
+                        sixteen_way_miss (temp_ram, spm_lock, out_way_ind, sixteen_way_temp_ram);
+                        write_tc_sram(ram_index,sixteen_way_temp_ram);
+                    end
+                    32: begin
+                        thirtytwo_way_miss (temp_ram, spm_lock, out_way_ind, thirtytwo_way_temp_ram);
+                        write_tc_sram(ram_index,thirtytwo_way_temp_ram);
+                    end
+                endcase 
+                valid_o = 1;
+                if ((tag_dirty_i & out_way_ind) != '0)
+                    evict_o = 1'b1;
+            end	
+        end
+
+    end
+
+ endgenerate
+    
 endmodule
