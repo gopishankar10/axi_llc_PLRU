@@ -105,6 +105,9 @@ line_addr plru_gen_index;
 data_plru plru_gen_pattern, plru_bist_pattern;
 way_ind_t plru_bist_res_i;
 
+//Compatibility Checker logic
+logic notComp;
+
 // TC_SRAM Instantiation 
 tc_sram #(
       .NumWords    ( Cfg.NumLines ),
@@ -441,6 +444,9 @@ generate
     
         // PLRU BIST Result valid signal
         plru_bist_res_valid_i = 0;
+        
+        //Compatibility Checker
+        notComp = 1'b0;
     
         if (bist_i) begin
             //To initialize the SRAM to Zeros
@@ -480,6 +486,7 @@ generate
                         thirtytwo_way_hit (res_indicator, temp_ram, thirtytwo_way_temp_ram);
                         write_tc_sram(ram_index,thirtytwo_way_temp_ram);
                     end
+                    default : notComp = 1'b1;
                 endcase 
                 valid_o_plru = 1;   
             end
@@ -511,6 +518,7 @@ generate
                         thirtytwo_way_miss (temp_ram, spm_lock, out_way_ind, thirtytwo_way_temp_ram);
                         write_tc_sram(ram_index,thirtytwo_way_temp_ram);
                     end
+                    default: notComp = 1'b1;
                 endcase 
                 valid_o = 1;
                 if ((tag_dirty_i & out_way_ind) != '0)
@@ -521,5 +529,13 @@ generate
     end
 
  endgenerate
+ 
+ // check if the compatibility issues
+  // pragma translate_off
+  `ifndef VERILATOR
+  check_compatibility: assert property ( @(posedge clk_i) disable iff (~rst_ni) !(notComp)) else
+      $fatal(1, "PLRU Set Associativity not in the range (2, 4, 8, 16, 32)");    
+  `endif
+  // pragma translate_on
     
 endmodule
