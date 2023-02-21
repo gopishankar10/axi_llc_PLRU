@@ -135,8 +135,8 @@ axi_llc_tag_pattern_gen #(
     .way_ind_t 	( way_ind_t ),
     .index_t   	( line_addr )
   ) i_plru_pattern_gen (
-    .clk_i	          ( clk_i	               ),
-    .rst_ni	          ( rst_ni                 ),
+    .clk_i	       ( clk_i	                ),
+    .rst_ni	       ( rst_ni                ),
     .valid_i          ( plru_gen_valid         ),
     .ready_o          ( plru_gen_ready         ),
     .index_o          ( plru_gen_index         ),
