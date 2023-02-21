@@ -88,17 +88,38 @@ module axi_llc_evict_box #(
     );
        
   end else begin : gen_no_plru
-  	assign way_ind_o = 1'b1;
-  	assign valid_o = 1;
-  	assign evict_o = ((tag_dirty_i & way_ind_o)!= '0) ? 1'b1 : 1'b0;
+
+    always_comb begin    
+      way_ind_o       = 0;
+      valid_o         = 0;
+      evict_o         = 0;
+      valid_o_plru    = 0;
+      plru_gen_ready  = 1;
+      plru_gen_eoc    = 1;
+      plru_bist_res_o = '0;
+
+      if (evict_i) begin
+        way_ind_o = 1'b1;
+  	    valid_o = 1;
+        if (tag_dirty_i)
+          evict_o = 1'b1;
+        else
+          evict_o = 1'b0;
+      end
+      if (hit_i)
+        valid_o_plru = 1'b1;
+    end
+
   end
   
 
   // check if the output really is onehot
   // pragma translate_off
   `ifndef VERILATOR
-  check_onehot: assert property ( @(posedge clk_i) disable iff (~rst_ni) $onehot0(way_ind_o)) else
+  check_onehot_out_way: assert property ( @(posedge clk_i) disable iff (~rst_ni) $onehot0(way_ind_o)) else
       $fatal(1, "More than two bit set in the one-hot signal");
+  check_onehot_Set_Asso: assert property ( @(posedge clk_i) disable iff (~rst_ni) $onehot0(Cfg.SetAssociativity)) else
+      $fatal(1, "Set Associativity not compatible with PLRU replacement policy");    
   `endif
   // pragma translate_on
 endmodule
