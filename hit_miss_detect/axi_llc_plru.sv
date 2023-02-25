@@ -30,6 +30,8 @@ module axi_llc_plru #(
     /// For each way there is one signal. When high the way is configured as SPM. They are disabled
     /// for store requests.
     input way_ind_t spm_lock,
+    /// All valid tags as input. This indicates if there are still free ways for putting in data.
+    input  way_ind_t tag_valid_i,
     /// All dirty flags as input. This indicates us if we have to write back the data.
     input  way_ind_t tag_dirty_i,
     /// req_i signal to activate miss way counter
@@ -101,6 +103,9 @@ line_addr plru_gen_index;
 data_plru plru_gen_pattern, plru_bist_pattern;
 way_ind_t plru_bist_res_i;
 
+//Occuiped ways in an index
+way_ind_t occupied;
+
 //Compatibility Checker logic
 logic notComp;
 
@@ -161,6 +166,9 @@ assign plru_bist_res_i = ((temp_ram) ~^ (plru_bist_pattern));
 // Memory Read/Write delay signals    
 assign ram_rvalid_d = (plru_request & ~plru_we) ? 1 : 0;    
 `FFLARN(ram_rvalid_q, ram_rvalid_d, 1'b1, 1'b0, clk_i, rst_ni)
+
+// Tag_Invalid & Non-SPM Lock - Way Indicator
+assign occupied = tag_valid_i | spm_lock;
     
 //--------------MEMORY READ/WRITE TASKS------------------------//
 //Write task onto tc_sram (Dual port memory)
@@ -312,19 +320,31 @@ task two_way_miss (input temp_ram, input [1:0] spm_lock, output [1:0] two_way_ou
 endtask
 
 //Task for Four Way Miss Checking
-task four_way_miss (input [2:0] temp_ram, input [3:0] spm_lock, output [3:0] four_way_out_ind, output [2:0] four_way_temp_ram);
+task four_way_miss (input [2:0] temp_ram, input [3:0] occupied, input [3:0] spm_lock, output [3:0] four_way_out_ind, output [2:0] four_way_temp_ram);
 
     begin      
         four_way_temp_ram = temp_ram;
-
-        if (spm_lock[3:2] == 2'b11) begin
-            four_way_temp_ram[0] = 1;
-        end
-        else if (spm_lock[1:0] == 2'b11) begin
-            four_way_temp_ram[0] = 0;
+        if (occupied == '1) begin
+            if (spm_lock[3:2] == 2'b11) begin
+            	four_way_temp_ram[0] = 1;
+            end
+            else if (spm_lock[1:0] == 2'b11) begin
+            	four_way_temp_ram[0] = 0;
+            end
+            else begin
+            	four_way_temp_ram [0] = ~temp_ram[0];
+            end
         end
         else begin
-            four_way_temp_ram [0] = ~temp_ram[0];
+            if (occupied[3:2] == 2'b11) begin
+            	four_way_temp_ram[0] = 1;
+            end
+            else if (occupied[1:0] == 2'b11) begin
+            	four_way_temp_ram[0] = 0;
+            end
+            else begin
+            	four_way_temp_ram [0] = ~temp_ram[0];
+            end
         end
 
         if(four_way_temp_ram[0] == 0) begin
@@ -336,132 +356,175 @@ task four_way_miss (input [2:0] temp_ram, input [3:0] spm_lock, output [3:0] fou
             two_way_miss (four_way_temp_ram[2], spm_lock [1:0], two_way_out_ind, two_way_temp_ram);
             four_way_out_ind = {2'b0, two_way_out_ind};
             four_way_temp_ram [2] = two_way_temp_ram;
-        end    
-                   
+        end                    
     end
 
 endtask
 
 //Task for Eight Way Miss Checking
-task eight_way_miss (input [6:0] temp_ram, input [7:0] spm_lock, output [7:0] eight_way_out_ind, output [6:0] eight_way_temp_ram);
+task eight_way_miss (input [6:0] temp_ram, input [7:0] occupied, input [7:0] spm_lock, output [7:0] eight_way_out_ind, output [6:0] eight_way_temp_ram);
 
     begin     
         eight_way_temp_ram = temp_ram;
-
-        if (spm_lock[7:4] == 4'hF) begin
-            eight_way_temp_ram[0] = 1;
-        end
-        else if (spm_lock[3:0] == 4'hF) begin
-            eight_way_temp_ram[0] = 0;
+        if (occupied == '1) begin
+            if (spm_lock[7:4] == 4'hF) begin
+            	eight_way_temp_ram[0] = 1;
+            end
+            else if (spm_lock[3:0] == 4'hF) begin
+            	eight_way_temp_ram[0] = 0;
+            end
+            else begin
+            	eight_way_temp_ram[0] = ~temp_ram[0];
+            end
         end
         else begin
-            eight_way_temp_ram[0] = ~temp_ram[0];
+            if (occupied[7:4] == 4'hF) begin
+            	eight_way_temp_ram[0] = 1;
+            end
+            else if (occupied[3:0] == 4'hF) begin
+            	eight_way_temp_ram[0] = 0;
+            end
+            else begin
+            	eight_way_temp_ram[0] = ~temp_ram[0];
+            end
         end
 
         if(eight_way_temp_ram[0] == 0) begin
-            four_way_miss (eight_way_temp_ram[3:1], spm_lock[7:4], four_way_out_ind, four_way_temp_ram);
+            four_way_miss (eight_way_temp_ram[3:1], occupied[7:4], spm_lock[7:4], four_way_out_ind, four_way_temp_ram);
             eight_way_out_ind = {four_way_out_ind,4'b0};
             eight_way_temp_ram [3:1] = four_way_temp_ram;
         end
         else if(eight_way_temp_ram[0] == 1) begin
-            four_way_miss (eight_way_temp_ram[6:4], spm_lock[3:0], four_way_out_ind, four_way_temp_ram);
+            four_way_miss (eight_way_temp_ram[6:4], occupied[3:0], spm_lock[3:0], four_way_out_ind, four_way_temp_ram);
             eight_way_out_ind = {4'b0, four_way_out_ind};
             eight_way_temp_ram [6:4] = four_way_temp_ram;
-        end
-                       
+        end                     
     end
 
 endtask
 
 //Task for Sixteen Way Miss Checking
-task sixteen_way_miss (input [14:0] temp_ram, input [15:0] spm_lock, output [15:0] sixteen_way_out_ind, output [14:0] sixteen_way_temp_ram);
+task sixteen_way_miss (input [14:0] temp_ram, input [15:0] occupied, input [15:0] spm_lock, output [15:0] sixteen_way_out_ind, output [14:0] sixteen_way_temp_ram);
 
     begin      
-        sixteen_way_temp_ram = temp_ram;
-
-        if (spm_lock[15:8] == 8'hFF) begin
-            sixteen_way_temp_ram[0] = 1;
-        end
-        else if (spm_lock[7:0] == 8'hFF) begin
-            sixteen_way_temp_ram[0] = 0;
+        sixteen_way_temp_ram = temp_ram;       
+        if (occupied == '1) begin
+            if (spm_lock[15:8] == 8'hFF) begin
+            	sixteen_way_temp_ram[0] = 1;
+            end
+            else if (spm_lock[7:0] == 8'hFF) begin
+            	sixteen_way_temp_ram[0] = 0;
+            end
+            else begin
+            	sixteen_way_temp_ram[0] = ~temp_ram[0];
+            end
         end
         else begin
-            sixteen_way_temp_ram[0] = ~temp_ram[0];
+            if (occupied[15:8] == 8'hFF) begin
+            	sixteen_way_temp_ram[0] = 1;
+            end
+            else if (occupied[7:0] == 8'hFF) begin
+            	sixteen_way_temp_ram[0] = 0;
+            end
+            else begin
+            	sixteen_way_temp_ram[0] = ~temp_ram[0];
+            end
         end
 
         if(sixteen_way_temp_ram[0] == 0) begin
-            eight_way_miss (sixteen_way_temp_ram[7:1], spm_lock[15:8], eight_way_out_ind, eight_way_temp_ram);
+            eight_way_miss (sixteen_way_temp_ram[7:1], occupied[15:8], spm_lock[15:8], eight_way_out_ind, eight_way_temp_ram);
             sixteen_way_out_ind = {eight_way_out_ind,8'b0};
             sixteen_way_temp_ram [7:1] = eight_way_temp_ram;
         end
         else if(sixteen_way_temp_ram[0] == 1) begin
-            eight_way_miss (sixteen_way_temp_ram[14:8], spm_lock[7:0], eight_way_out_ind, eight_way_temp_ram);
+            eight_way_miss (sixteen_way_temp_ram[14:8], occupied[7:0], spm_lock[7:0], eight_way_out_ind, eight_way_temp_ram);
             sixteen_way_out_ind = {8'b0, eight_way_out_ind};
             sixteen_way_temp_ram [14:8] = eight_way_temp_ram;
-        end    
-                  
+        end                    
     end
 
 endtask
 
 //Task for Thirtytwo Way Miss Checking
-task thirtytwo_way_miss (input [30:0] temp_ram, input [31:0] spm_lock, output [31:0] thirtytwo_way_out_ind, output [30:0] thirtytwo_way_temp_ram);
+task thirtytwo_way_miss (input [30:0] temp_ram, input [31:0] occupied, input [31:0] spm_lock, output [31:0] thirtytwo_way_out_ind, output [30:0] thirtytwo_way_temp_ram);
 
     begin      
         thirtytwo_way_temp_ram = temp_ram;
-
-        if (spm_lock[31:16] == 16'hFFFF) begin
-            thirtytwo_way_temp_ram[0] = 1;
-        end
-        else if (spm_lock[15:0] == 16'hFFFF) begin
-            thirtytwo_way_temp_ram[0] = 0;
+        if (occupied == '1) begin
+            if (spm_lock[31:16] == 16'hFFFF) begin
+            	thirtytwo_way_temp_ram[0] = 1;
+            end
+            else if (spm_lock[15:0] == 16'hFFFF) begin
+            	thirtytwo_way_temp_ram[0] = 0;
+            end
+            else begin
+            	thirtytwo_way_temp_ram[0] = ~temp_ram[0];
+            end
         end
         else begin
-            thirtytwo_way_temp_ram[0] = ~temp_ram[0];
+            if (occupied[31:16] == 16'hFFFF) begin
+            	thirtytwo_way_temp_ram[0] = 1;
+            end
+            else if (occupied[15:0] == 16'hFFFF) begin
+            	thirtytwo_way_temp_ram[0] = 0;
+            end
+            else begin
+            	thirtytwo_way_temp_ram[0] = ~temp_ram[0];
+            end
         end
 
         if(thirtytwo_way_temp_ram[0] == 0) begin
-            sixteen_way_miss (thirtytwo_way_temp_ram[15:1], spm_lock[31:16], sixteen_way_out_ind, sixteen_way_temp_ram);
+            sixteen_way_miss (thirtytwo_way_temp_ram[15:1], occupied[31:16], spm_lock[31:16], sixteen_way_out_ind, sixteen_way_temp_ram);
             thirtytwo_way_out_ind = {sixteen_way_out_ind,16'b0};
             thirtytwo_way_temp_ram [15:1] = sixteen_way_temp_ram;
         end
         else if(thirtytwo_way_temp_ram[0] == 1) begin
-            sixteen_way_miss (thirtytwo_way_temp_ram[30:16], spm_lock[15:0], sixteen_way_out_ind, sixteen_way_temp_ram);
+            sixteen_way_miss (thirtytwo_way_temp_ram[30:16], occupied[15:0], spm_lock[15:0], sixteen_way_out_ind, sixteen_way_temp_ram);
             thirtytwo_way_out_ind = {16'b0, sixteen_way_out_ind};
             thirtytwo_way_temp_ram [30:16] = sixteen_way_temp_ram;
-        end  
-            
+        end            
     end
 
 endtask
 
 //Task for Sixtyfour Way Miss Checking
-task sixtyfour_way_miss (input [62:0] temp_ram, input [63:0] spm_lock, output [63:0] sixtyfour_way_out_ind, output [62:0] sixtyfour_way_temp_ram);
+task sixtyfour_way_miss (input [62:0] temp_ram, input [63:0] occupied, input [63:0] spm_lock, output [63:0] sixtyfour_way_out_ind, output [62:0] sixtyfour_way_temp_ram);
 
     begin      
-        sixtyfour_way_temp_ram = temp_ram;
-
-        if (spm_lock[63:32] == 32'hFFFF_FFFF) begin
-            sixtyfour_way_temp_ram[0] = 1;
-        end
-        else if (spm_lock[31:0] == 32'hFFFF_FFFF) begin
-            sixtyfour_way_temp_ram[0] = 0;
+        sixtyfour_way_temp_ram = temp_ram;                
+        if (occupied == '1) begin
+            if (spm_lock[63:32] == 32'hFFFF_FFFF) begin
+            	sixtyfour_way_temp_ram[0] = 1;
+            end
+            else if (spm_lock[31:0] == 32'hFFFF_FFFF) begin
+            	sixtyfour_way_temp_ram[0] = 0;
+            end
+            else begin
+            	sixtyfour_way_temp_ram[0] = ~temp_ram[0];
+            end
         end
         else begin
-            sixtyfour_way_temp_ram[0] = ~temp_ram[0];
+            if (occupied[63:32] == 32'hFFFF_FFFF) begin
+            	sixtyfour_way_temp_ram[0] = 1;
+            end
+            else if (occupied[31:0] == 32'hFFFF_FFFF) begin
+            	sixtyfour_way_temp_ram[0] = 0;
+            end
+            else begin
+            	sixtyfour_way_temp_ram[0] = ~temp_ram[0];
+            end
         end
 
         if(sixtyfour_way_temp_ram[0] == 0) begin
-            thirtytwo_way_miss (sixtyfour_way_temp_ram[31:1], spm_lock[63:32], thirtytwo_way_out_ind, thirtytwo_way_temp_ram);
+            thirtytwo_way_miss (sixtyfour_way_temp_ram[31:1], occupied[63:32], spm_lock[63:32], thirtytwo_way_out_ind, thirtytwo_way_temp_ram);
             sixtyfour_way_out_ind = {thirtytwo_way_out_ind,32'b0};
             sixtyfour_way_temp_ram [31:1] = thirtytwo_way_temp_ram;
         end
         else if(sixtyfour_way_temp_ram[0] == 1) begin
-            thirtytwo_way_miss (sixtyfour_way_temp_ram[62:32], spm_lock[31:0], thirtytwo_way_out_ind, thirtytwo_way_temp_ram);
+            thirtytwo_way_miss (sixtyfour_way_temp_ram[62:32], occupied[31:0], spm_lock[31:0], thirtytwo_way_out_ind, thirtytwo_way_temp_ram);
             sixtyfour_way_out_ind = {32'b0, thirtytwo_way_out_ind};
             sixtyfour_way_temp_ram [62:32] = thirtytwo_way_temp_ram;
-        end  
-            
+        end            
     end
 
 endtask
@@ -551,23 +614,23 @@ generate
                         write_tc_sram(ram_index,two_way_temp_ram);
                     end
                     4: begin
-                        four_way_miss(temp_ram, spm_lock, out_way_ind, four_way_temp_ram);
+                        four_way_miss(temp_ram, occupied, spm_lock, out_way_ind, four_way_temp_ram);
                         write_tc_sram(ram_index,four_way_temp_ram);
                     end
                     8: begin
-                        eight_way_miss (temp_ram, spm_lock, out_way_ind, eight_way_temp_ram);
+                        eight_way_miss (temp_ram, occupied, spm_lock, out_way_ind, eight_way_temp_ram);
                         write_tc_sram(ram_index,eight_way_temp_ram);
                     end
                     16: begin
-                        sixteen_way_miss (temp_ram, spm_lock, out_way_ind, sixteen_way_temp_ram);
+                        sixteen_way_miss (temp_ram, occupied, spm_lock, out_way_ind, sixteen_way_temp_ram);
                         write_tc_sram(ram_index,sixteen_way_temp_ram);
                     end
                     32: begin
-                        thirtytwo_way_miss (temp_ram, spm_lock, out_way_ind, thirtytwo_way_temp_ram);
+                        thirtytwo_way_miss (temp_ram, occupied, spm_lock, out_way_ind, thirtytwo_way_temp_ram);
                         write_tc_sram(ram_index,thirtytwo_way_temp_ram);
                     end
                     64: begin
-                        sixtyfour_way_miss (temp_ram, spm_lock, out_way_ind, sixtyfour_way_temp_ram);
+                        sixtyfour_way_miss (temp_ram, occupied, spm_lock, out_way_ind, sixtyfour_way_temp_ram);
                         write_tc_sram(ram_index,sixtyfour_way_temp_ram);
                     end
                     default : notComp = 1'b1;

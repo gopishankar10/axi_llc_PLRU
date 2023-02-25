@@ -70,6 +70,7 @@ module axi_llc_evict_box #(
       .rst_ni,
       .ram_index      ( ram_index     ),
       .spm_lock       ( spm_lock_i    ),
+      .tag_valid_i    ( tag_valid_i   ),
       .tag_dirty_i    ( tag_dirty_i   ),
       .evict_i        ( evict_i       ),
       .hit_i          ( hit_i         ),
