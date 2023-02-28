@@ -531,7 +531,7 @@ endtask
 
 // -----------------------------------------------------------------------------------------------------------------------// 
 
-generate
+//generate
     
     always_comb begin : axi_llc_all_way
     
@@ -643,7 +643,7 @@ generate
 
     end
 
- endgenerate  
+ //endgenerate  
  
  
  // check if the compatibility issues
