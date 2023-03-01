@@ -161,8 +161,8 @@ module axi_llc_tag_store #(
             
             // To Indicate Bist request to the PLRU Unit
             bist_req   = 1;
-            // If BIST finished (For tag and PLRU), go to idle.
-            if (gen_eoc && plru_gen_eoc) begin
+            // If BIST finished, go to idle.
+            if (gen_eoc) begin
               switch_busy = 1'b1;
             end
           end
@@ -256,9 +256,9 @@ module axi_llc_tag_store #(
         unique case (req_i.mode)
           axi_llc_pkg::Bist: begin
             gen_valid   = 1'b1;
-            ready_o     = gen_ready & plru_gen_ready;
+            ready_o     = gen_ready;
             // Only switch the state, if the request is valid
-            switch_busy = gen_ready & plru_gen_ready;
+            switch_busy = gen_ready;
           end
           axi_llc_pkg::Lookup, axi_llc_pkg::Flush: begin
             // Do the lookup on the requested macros
@@ -396,7 +396,7 @@ module axi_llc_tag_store #(
   );
   
   // Assign plru_bist_valid_o signal for Memory BIST Checking (PLRU ARRAY) 
-  assign plru_bist_valid_o = (req_q.mode == axi_llc_pkg::BIST) & plru_gen_eoc;
+  //assign plru_bist_valid_o = (req_q.mode == axi_llc_pkg::BIST) & plru_gen_eoc;
 
   onehot_to_bin #(
     .ONEHOT_WIDTH ( Cfg.SetAssociativity )
