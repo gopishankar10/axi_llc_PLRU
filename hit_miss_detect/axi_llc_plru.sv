@@ -115,7 +115,7 @@ tc_sram #(
       .DataWidth   ( plru_datalen ),
       .ByteWidth   ( plru_datalen ),
       .NumPorts    ( 32'd1        ),
-      .Latency     ( 32'd0	   ),
+      .Latency     ( 32'd1	   ),
       .SimInit     ( "none"       ),
       .PrintSimCfg ( 1'b1         )
 ) i_plru_store (
