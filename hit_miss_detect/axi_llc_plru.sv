@@ -548,9 +548,24 @@ endtask
         plru_request = 1'b0;
         plru_line_addr = line_addr'(0);
         plru_wdata = data_plru'(0);
+        plru_we = 1'b0;
     
         // PLRU BIST Result valid signal
         plru_bist_res_valid_i = 0;
+        
+        //All Temp Ram initialization
+        two_way_temp_ram = 1'b0;
+	four_way_temp_ram = 3'b0;
+	eight_way_temp_ram = 7'b0;
+	sixteen_way_temp_ram = 15'b0;
+	thirtytwo_way_temp_ram = 31'b0;
+	sixtyfour_way_temp_ram = 63'b0;
+
+	two_way_out_ind = 2'b0;
+	four_way_out_ind = 4'b0;
+	eight_way_out_ind = 8'b0;
+	sixteen_way_out_ind = 16'b0;
+	thirtytwo_way_out_ind = 32'b0;
         
         //Compatibility Checker
         notComp = 1'b0;

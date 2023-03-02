@@ -141,6 +141,9 @@ module axi_llc_tag_store #(
     evict_req    = 1'b0;
     // PLRU Module Hit Request
     hit_req	 = 1'b0;
+    // PLRU Hit_inp/Ram_index_inp Initialization
+    hit_inp     = way_ind_t'(0);
+    ram_index_inp = index_t'(0);
     // PLRU Module Bist Req Initialization
     bist_req    = 1'b0;
     // generation request
@@ -162,7 +165,7 @@ module axi_llc_tag_store #(
             // To Indicate Bist request to the PLRU Unit
             bist_req   = 1;
             // If BIST finished, go to idle.
-            if (gen_eoc) begin
+            if (gen_eoc && plru_gen_eoc) begin
               switch_busy = 1'b1;
             end
           end
@@ -256,9 +259,9 @@ module axi_llc_tag_store #(
         unique case (req_i.mode)
           axi_llc_pkg::Bist: begin
             gen_valid   = 1'b1;
-            ready_o     = gen_ready;
+            ready_o     = gen_ready & plru_gen_ready;
             // Only switch the state, if the request is valid
-            switch_busy = gen_ready;
+            switch_busy = gen_ready & plru_gen_ready;
           end
           axi_llc_pkg::Lookup, axi_llc_pkg::Flush: begin
             // Do the lookup on the requested macros
@@ -376,7 +379,7 @@ module axi_llc_tag_store #(
     .clk_i,
     .rst_ni,
     .evict_i        ( evict_req     ),
-    .hit_i	        ( hit_req	      ),
+    .hit_i	     ( hit_req	      ),
     .bist_i         ( bist_req      ),
     .res_indicator  ( hit_inp       ),
     .tag_valid_i    ( tag_val       ),
