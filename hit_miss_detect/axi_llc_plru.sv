@@ -608,10 +608,10 @@ endtask
                         thirtytwo_way_hit (res_indicator, temp_ram, thirtytwo_way_temp_ram);
                         write_tc_sram(ram_index,thirtytwo_way_temp_ram);
                     end
-                    64: begin
+                /*    64: begin
                         sixtyfour_way_hit (res_indicator, temp_ram, sixtyfour_way_temp_ram);
                         write_tc_sram(ram_index,sixtyfour_way_temp_ram);
-                    end
+                    end*/
                     default : notComp = 1'b1;
                 endcase 
                 valid_o_plru = 1;   
@@ -644,10 +644,10 @@ endtask
                         thirtytwo_way_miss (temp_ram, occupied, spm_lock, out_way_ind, thirtytwo_way_temp_ram);
                         write_tc_sram(ram_index,thirtytwo_way_temp_ram);
                     end
-                    64: begin
+                  /*  64: begin
                         sixtyfour_way_miss (temp_ram, occupied, spm_lock, out_way_ind, sixtyfour_way_temp_ram);
                         write_tc_sram(ram_index,sixtyfour_way_temp_ram);
-                    end
+                    end */
                     default : notComp = 1'b1;
                 endcase 
                 valid_o = 1;
